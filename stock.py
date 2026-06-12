@@ -3,11 +3,14 @@ import yfinance as yf
 
 def get_stock_price(symbol: str) -> dict | None:
     """查詢台股收盤價，symbol 傳入代號如 '2330'，自動補 .TW"""
-    ticker_symbol = f"{symbol}.TW" if not symbol.startswith("^") else symbol
+    if symbol.startswith("^") or symbol.endswith(".TW"):
+        ticker_symbol = symbol
+    else:
+        ticker_symbol = f"{symbol}.TW"
     ticker = yf.Ticker(ticker_symbol)
 
     try:
-        hist = ticker.history(period="2d")
+        hist = ticker.history(period="5d", auto_adjust=False)
         if hist.empty:
             return None
 
