@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import logging
@@ -6,6 +7,7 @@ import os
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 
+from db import add_stock, get_notify, get_stocks, remove_stock, set_notify
 from stock import format_stock_message, get_stock_price
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -21,7 +23,6 @@ LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
 # ── LINE Webhook ──────────────────────────────────────────────────────────────
 
 def verify_signature(body: bytes, signature: str) -> bool:
-    import base64
     digest = hmac.new(
         LINE_CHANNEL_SECRET.encode(), body, hashlib.sha256
     ).digest()
@@ -46,7 +47,7 @@ async def reply_message(reply_token: str, text: str) -> None:
 
 # ── 指令處理 ──────────────────────────────────────────────────────────────────
 
-async def handle_text(reply_token: str, text: str) -> None:
+async def handle_text(reply_token: str, user_id: str, text: str) -> None:
     text = text.strip()
 
     if text.startswith("/查股"):
@@ -54,7 +55,6 @@ async def handle_text(reply_token: str, text: str) -> None:
         if len(parts) < 2:
             await reply_message(reply_token, "請輸入股票代號，例如：/查股 2330")
             return
-
         symbol = parts[1].strip()
         data = get_stock_price(symbol)
         if data is None:
@@ -62,12 +62,57 @@ async def handle_text(reply_token: str, text: str) -> None:
         else:
             await reply_message(reply_token, format_stock_message(data))
 
+    elif text.startswith("/追蹤"):
+        parts = text.split()
+        if len(parts) < 2:
+            await reply_message(reply_token, "請輸入股票代號，例如：/追蹤 2330")
+            return
+        symbol = parts[1].strip()
+        ok = add_stock(user_id, symbol)
+        if ok:
+            await reply_message(reply_token, f"✅ 已加入追蹤：{symbol}")
+        else:
+            await reply_message(reply_token, "追蹤清單已達上限（最多 10 支），請先取消追蹤部分股票。")
+
+    elif text.startswith("/取消追蹤"):
+        parts = text.split()
+        if len(parts) < 2:
+            await reply_message(reply_token, "請輸入股票代號，例如：/取消追蹤 2330")
+            return
+        symbol = parts[1].strip()
+        ok = remove_stock(user_id, symbol)
+        if ok:
+            await reply_message(reply_token, f"✅ 已取消追蹤：{symbol}")
+        else:
+            await reply_message(reply_token, f"{symbol} 不在你的追蹤清單中。")
+
+    elif text == "/我的股票":
+        stocks = get_stocks(user_id)
+        notify = get_notify(user_id)
+        if not stocks:
+            await reply_message(reply_token, "追蹤清單是空的，輸入 /追蹤 [代號] 開始追蹤。")
+        else:
+            notify_status = "開啟 ✅" if notify else "關閉 ❌"
+            stock_list = "\n".join(f"• {s}" for s in stocks)
+            await reply_message(reply_token, f"📋 你的追蹤清單（{len(stocks)}/10）：\n{stock_list}\n\n每日推播：{notify_status}")
+
+    elif text == "/推播開":
+        set_notify(user_id, True)
+        await reply_message(reply_token, "✅ 每日推播已開啟，收盤後約 15:00 推播。")
+
+    elif text == "/推播關":
+        set_notify(user_id, False)
+        await reply_message(reply_token, "❌ 每日推播已關閉。")
+
     else:
         await reply_message(
             reply_token,
             "Bower Stock 指令列表：\n"
             "/查股 [代號] — 查詢股票現價\n"
-            "\n更多功能即將推出 🚀",
+            "/追蹤 [代號] — 加入追蹤清單\n"
+            "/取消追蹤 [代號] — 移除追蹤\n"
+            "/我的股票 — 查看追蹤清單\n"
+            "/推播開 / /推播關 — 開關每日推播",
         )
 
 
@@ -97,7 +142,8 @@ async def webhook(
             continue
 
         reply_token = event["replyToken"]
+        user_id = event["source"]["userId"]
         text = event["message"]["text"]
-        await handle_text(reply_token, text)
+        await handle_text(reply_token, user_id, text)
 
     return {"status": "ok"}
