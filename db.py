@@ -68,3 +68,15 @@ def get_notify(user_id: str) -> bool:
     if not doc.exists:
         return True
     return doc.to_dict().get("notify", True)
+
+
+def get_all_notify_users() -> list[dict]:
+    """回傳所有 notify=True 且有追蹤股票的用戶，含 user_id 與 stocks 清單"""
+    docs = get_db().collection("stock_users").where("notify", "==", True).stream()
+    result = []
+    for doc in docs:
+        data = doc.to_dict()
+        stocks = data.get("stocks", [])
+        if stocks:
+            result.append({"user_id": doc.id, "stocks": stocks})
+    return result
