@@ -46,7 +46,10 @@ def _fetch_twse(symbol: str) -> dict | None:
         change = 0.0
 
     change_pct = round((change / (close - change)) * 100, 2) if (close - change) != 0 else 0
-    name = data.get("title", "").split(" ")[1] if " " in data.get("title", "") else symbol
+    title = data.get("title", "")
+    # title 格式通常為 "XX年XX月 XXXX 股票日成交資訊"
+    parts = title.split()
+    name = parts[1] if len(parts) >= 2 else symbol
 
     return {
         "symbol": symbol,
