@@ -3,11 +3,14 @@ import hashlib
 import hmac
 import logging
 import os
+from datetime import datetime
 
 import httpx
 from fastapi import FastAPI, Header, HTTPException, Request
 
-from db import add_stock, get_notify, get_stocks, remove_stock, set_notify
+from ai import get_ai_analysis
+from analysis import get_indicators
+from db import add_stock, get_all_notify_users, get_notify, get_stocks, remove_stock, set_notify
 from stock import format_stock_message, get_stock_price
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -18,6 +21,8 @@ app = FastAPI(title="Bower Stock")
 LINE_CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 LINE_CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply"
+LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push"
+BROADCAST_SECRET = os.environ.get("BROADCAST_SECRET", "")
 
 
 # ── LINE Webhook ──────────────────────────────────────────────────────────────
@@ -116,11 +121,87 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
         )
 
 
+# ── LINE Push ─────────────────────────────────────────────────────────────────
+
+async def push_message(user_id: str, text: str) -> None:
+    headers = {
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "to": user_id,
+        "messages": [{"type": "text", "text": text}],
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(LINE_PUSH_URL, json=payload, headers=headers)
+        if resp.status_code != 200:
+            logger.error("LINE push failed: %s", resp.text)
+
+
+def build_stock_block(symbol: str) -> str | None:
+    """取得單支股票的完整推播區塊文字，失敗回傳 None"""
+    price_data = get_stock_price(symbol)
+    indicators = get_indicators(symbol)
+
+    if price_data is None:
+        logger.warning("broadcast: no price data for %s", symbol)
+        return None
+
+    name = price_data.get("name", symbol)
+    arrow = "▲" if price_data["change"] >= 0 else "▼"
+    sign = "+" if price_data["change"] >= 0 else ""
+    price_line = (
+        f"{name}（{symbol}）\n"
+        f"現價：{price_data['price']} 元\n"
+        f"漲跌：{arrow} {sign}{price_data['change']} ({sign}{price_data['change_pct']}%)"
+    )
+
+    if indicators is None:
+        return price_line + "\n技術分析：資料不足，無法分析"
+
+    try:
+        ai_block = get_ai_analysis(name, indicators)
+    except Exception as e:
+        logger.error("AI analysis error for %s: %s", symbol, e)
+        ai_block = "技術分析：分析暫時無法使用"
+
+    return f"{price_line}\n\n{ai_block}"
+
+
 # ── FastAPI Routes ────────────────────────────────────────────────────────────
 
 @app.get("/")
 def health():
     return {"status": "ok", "service": "bower-stock"}
+
+
+@app.post("/broadcast")
+async def broadcast(request: Request, authorization: str = Header(...)):
+    if not BROADCAST_SECRET or authorization != f"Bearer {BROADCAST_SECRET}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    users = get_all_notify_users()
+    logger.info("broadcast: %d users to notify", len(users))
+
+    now = datetime.now().strftime("%H:%M")
+    header = f"📈 每日收盤報告 {now}\n"
+
+    pushed = 0
+    for user in users:
+        blocks = []
+        for symbol in user["stocks"]:
+            block = build_stock_block(symbol)
+            if block:
+                blocks.append(block)
+
+        if not blocks:
+            continue
+
+        message = header + "\n\n".join(blocks) + "\n\n⚠️ 以上僅供個人參考，非投資建議"
+        await push_message(user["user_id"], message)
+        pushed += 1
+
+    return {"status": "ok", "pushed": pushed}
 
 
 @app.post("/webhook")
