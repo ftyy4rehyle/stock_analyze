@@ -49,7 +49,7 @@ def _fetch_twse(symbol: str) -> dict | None:
     title = data.get("title", "")
     # title 格式通常為 "XX年XX月 XXXX 股票日成交資訊"
     parts = title.split()
-    name = parts[1] if len(parts) >= 2 else symbol
+    name = parts[2] if len(parts) >= 3 else symbol
 
     return {
         "symbol": symbol,
