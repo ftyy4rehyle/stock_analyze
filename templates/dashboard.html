@@ -309,18 +309,23 @@ async function loadChart(symbol, name) {
   });
   mainChart.timeScale().fitContent();
 
-  const candleSeries = mainChart.addCandlestickSeries({
+  // 相容 v4 / v5 API
+  const addCandle = mainChart.addCandlestickSeries
+    ? (opt) => mainChart.addCandlestickSeries(opt)
+    : (opt) => mainChart.addSeries(LightweightCharts.CandlestickSeries, opt);
+  const addLine = (chart, opt) => chart.addLineSeries
+    ? chart.addLineSeries(opt)
+    : chart.addSeries(LightweightCharts.LineSeries, opt);
+
+  const candleSeries = addCandle({
     upColor: '#22c55e', downColor: '#ef4444',
     borderUpColor: '#22c55e', borderDownColor: '#ef4444',
     wickUpColor: '#22c55e', wickDownColor: '#ef4444',
   });
   candleSeries.setData(data.candles);
 
-  const ma5Series = mainChart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false });
-  ma5Series.setData(data.ma5);
-
-  const ma20Series = mainChart.addLineSeries({ color: '#f59e0b', lineWidth: 1, priceLineVisible: false });
-  ma20Series.setData(data.ma20);
+  addLine(mainChart, { color: '#3b82f6', lineWidth: 1, priceLineVisible: false }).setData(data.ma5);
+  addLine(mainChart, { color: '#f59e0b', lineWidth: 1, priceLineVisible: false }).setData(data.ma20);
 
   // RSI 圖
   rsiChart = LightweightCharts.createChart(document.getElementById('rsi-container'), {
@@ -331,12 +336,11 @@ async function loadChart(symbol, name) {
     crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
   });
 
-  const rsiSeries = rsiChart.addLineSeries({ color: '#a78bfa', lineWidth: 1, priceLineVisible: false });
-  rsiSeries.setData(data.rsi);
+  addLine(rsiChart, { color: '#a78bfa', lineWidth: 1, priceLineVisible: false }).setData(data.rsi);
 
   // 超買/超賣線
-  const overbought = rsiChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
-  const oversold = rsiChart.addLineSeries({ color: '#22c55e', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+  const overbought = addLine(rsiChart, { color: '#ef4444', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+  const oversold = addLine(rsiChart, { color: '#22c55e', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
   if (data.rsi.length > 0) {
     const times = data.rsi.map(d => d.time);
     overbought.setData(times.map(t => ({ time: t, value: 70 })));
