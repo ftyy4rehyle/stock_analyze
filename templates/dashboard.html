@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Bower Stock</title>
-  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -28,8 +28,8 @@
     }
     header .logo { font-size: 1.1rem; font-weight: 700; }
     header .user { display: flex; align-items: center; gap: 12px; }
-    header .username { font-size: 0.85rem; color: #94a3b8; }
-    header a { color: #64748b; font-size: 0.8rem; text-decoration: none; }
+    header .username { font-size: 0.85rem; color: #cbd5e1; }
+    header a { color: #94a3b8; font-size: 0.8rem; text-decoration: none; }
     header a:hover { color: #e2e8f0; }
 
     main { max-width: 800px; margin: 0 auto; padding: 20px 16px; }
@@ -51,7 +51,7 @@
       outline: none;
     }
     .add-form input:focus { border-color: #3b82f6; }
-    .add-form input::placeholder { color: #475569; }
+    .add-form input::placeholder { color: #94a3b8; }
     .btn {
       background: #3b82f6;
       color: #fff;
@@ -68,10 +68,10 @@
 
     /* Stock list */
     .section-title {
-      font-size: 0.8rem;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      font-size: 0.85rem;
+      color: #cbd5e1;
+      font-weight: 600;
+      letter-spacing: 0.03em;
       margin-bottom: 10px;
     }
     .stock-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
@@ -89,7 +89,7 @@
     .stock-card:hover { border-color: #3b82f6; }
     .stock-card.active { border-color: #3b82f6; background: #1e3a5f; }
     .stock-info .name { font-weight: 600; font-size: 0.95rem; }
-    .stock-info .symbol { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .stock-info .symbol { font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }
     .stock-right { display: flex; align-items: center; gap: 16px; }
     .stock-price { text-align: right; }
     .stock-price .price { font-weight: 700; font-size: 1rem; }
@@ -100,7 +100,7 @@
       background: none;
       border: 1px solid #334155;
       border-radius: 6px;
-      color: #64748b;
+      color: #94a3b8;
       padding: 4px 10px;
       font-size: 0.8rem;
       cursor: pointer;
@@ -118,7 +118,7 @@
       margin-bottom: 12px;
     }
     .chart-title { font-size: 1rem; font-weight: 700; }
-    .chart-subtitle { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .chart-subtitle { font-size: 0.8rem; color: #94a3b8; margin-top: 2px; }
     #chart-container {
       background: #1e293b;
       border: 1px solid #334155;
