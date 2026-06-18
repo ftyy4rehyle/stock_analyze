@@ -12,11 +12,13 @@ from ai import get_ai_analysis
 from analysis import get_indicators
 from db import add_stock, get_all_notify_users, get_notify, get_stocks, remove_stock, set_notify
 from stock import format_stock_message, get_stock_price
+from web import router as web_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Bower Stock")
+app.include_router(web_router)
 
 LINE_CHANNEL_SECRET = os.environ["LINE_CHANNEL_SECRET"]
 LINE_CHANNEL_ACCESS_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
@@ -170,7 +172,7 @@ def build_stock_block(symbol: str) -> str | None:
 
 # ── FastAPI Routes ────────────────────────────────────────────────────────────
 
-@app.get("/")
+@app.get("/health")
 def health():
     return {"status": "ok", "service": "bower-stock"}
 

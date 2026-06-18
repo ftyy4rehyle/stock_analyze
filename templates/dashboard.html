@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bower Stock</title>
+  <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    header {
+      background: #1e293b;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #334155;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    header .logo { font-size: 1.1rem; font-weight: 700; }
+    header .user { display: flex; align-items: center; gap: 12px; }
+    header .username { font-size: 0.85rem; color: #94a3b8; }
+    header a { color: #64748b; font-size: 0.8rem; text-decoration: none; }
+    header a:hover { color: #e2e8f0; }
+
+    main { max-width: 800px; margin: 0 auto; padding: 20px 16px; }
+
+    /* Add stock */
+    .add-form {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .add-form input {
+      flex: 1;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #e2e8f0;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    .add-form input:focus { border-color: #3b82f6; }
+    .add-form input::placeholder { color: #475569; }
+    .btn {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { background: #334155; cursor: default; }
+
+    /* Stock list */
+    .section-title {
+      font-size: 0.8rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 10px;
+    }
+    .stock-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+    .stock-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .stock-card:hover { border-color: #3b82f6; }
+    .stock-card.active { border-color: #3b82f6; background: #1e3a5f; }
+    .stock-info .name { font-weight: 600; font-size: 0.95rem; }
+    .stock-info .symbol { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    .stock-right { display: flex; align-items: center; gap: 16px; }
+    .stock-price { text-align: right; }
+    .stock-price .price { font-weight: 700; font-size: 1rem; }
+    .stock-price .change { font-size: 0.8rem; margin-top: 2px; }
+    .up { color: #22c55e; }
+    .down { color: #ef4444; }
+    .btn-remove {
+      background: none;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      color: #64748b;
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-remove:hover { border-color: #ef4444; color: #ef4444; }
+
+    /* Chart section */
+    #chart-section { display: none; }
+    #chart-section.visible { display: block; }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .chart-title { font-size: 1rem; font-weight: 700; }
+    .chart-subtitle { font-size: 0.8rem; color: #64748b; margin-top: 2px; }
+    #chart-container {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+    #rsi-container {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 10px;
+      font-size: 0.78rem;
+    }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
+
+    .empty { color: #475569; font-size: 0.9rem; padding: 20px 0; }
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #334155;
+      color: #e2e8f0;
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">📈 Bower Stock</div>
+  <div class="user">
+    <span class="username">{{ display_name }}</span>
+    <a href="/auth/logout">登出</a>
+  </div>
+</header>
+
+<main>
+  <!-- Add stock -->
+  <div class="add-form">
+    <input id="add-input" type="text" placeholder="輸入股票代號（例如：2330）" maxlength="10">
+    <button class="btn" id="add-btn" onclick="addStock()">追蹤</button>
+  </div>
+
+  <!-- Watchlist -->
+  <div class="section-title">追蹤清單</div>
+  <div class="stock-list" id="stock-list">
+    <div class="empty">載入中…</div>
+  </div>
+
+  <!-- Chart -->
+  <div id="chart-section">
+    <div class="chart-header">
+      <div>
+        <div class="chart-title" id="chart-title"></div>
+        <div class="chart-subtitle">K 線圖</div>
+      </div>
+    </div>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> MA5</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> MA20</div>
+    </div>
+    <div id="chart-container" style="height:280px"></div>
+    <div class="chart-legend" style="margin-top:10px">
+      <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> RSI(14)</div>
+    </div>
+    <div id="rsi-container" style="height:120px"></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let mainChart = null;
+let rsiChart = null;
+let activeSymbol = null;
+
+// ── 載入追蹤清單 ──
+async function loadStocks() {
+  const resp = await fetch('/api/stocks');
+  if (!resp.ok) return;
+  const stocks = await resp.json();
+  const list = document.getElementById('stock-list');
+
+  if (stocks.length === 0) {
+    list.innerHTML = '<div class="empty">還沒有追蹤的股票，輸入代號開始追蹤。</div>';
+    return;
+  }
+
+  list.innerHTML = stocks.map(s => {
+    const up = s.change >= 0;
+    const arrow = up ? '▲' : '▼';
+    const sign = up ? '+' : '';
+    const cls = up ? 'up' : 'down';
+    return `
+      <div class="stock-card" id="card-${s.symbol}" onclick="loadChart('${s.symbol}', '${s.name}')">
+        <div class="stock-info">
+          <div class="name">${s.name}</div>
+          <div class="symbol">${s.symbol}</div>
+        </div>
+        <div class="stock-right">
+          <div class="stock-price">
+            <div class="price">${s.price ?? '-'}</div>
+            <div class="change ${cls}">${s.price ? `${arrow} ${sign}${s.change} (${sign}${s.change_pct}%)` : '-'}</div>
+          </div>
+          <button class="btn-remove" onclick="removeStock(event, '${s.symbol}')">移除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── 加入追蹤 ──
+async function addStock() {
+  const input = document.getElementById('add-input');
+  const symbol = input.value.trim().toUpperCase();
+  if (!symbol) return;
+
+  const btn = document.getElementById('add-btn');
+  btn.disabled = true;
+
+  const resp = await fetch(`/api/stocks/${symbol}`, { method: 'POST' });
+  if (resp.ok) {
+    input.value = '';
+    showToast(`✅ 已追蹤 ${symbol}`);
+    await loadStocks();
+  } else {
+    const err = await resp.json();
+    showToast(`❌ ${err.detail}`);
+  }
+  btn.disabled = false;
+}
+
+// ── 移除追蹤 ──
+async function removeStock(e, symbol) {
+  e.stopPropagation();
+  await fetch(`/api/stocks/${symbol}`, { method: 'DELETE' });
+  if (activeSymbol === symbol) {
+    document.getElementById('chart-section').classList.remove('visible');
+    activeSymbol = null;
+  }
+  showToast(`🗑 已移除 ${symbol}`);
+  await loadStocks();
+}
+
+// ── 載入 K 線圖 ──
+async function loadChart(symbol, name) {
+  if (activeSymbol === symbol) return;
+  activeSymbol = symbol;
+
+  document.querySelectorAll('.stock-card').forEach(el => el.classList.remove('active'));
+  const card = document.getElementById(`card-${symbol}`);
+  if (card) card.classList.add('active');
+
+  document.getElementById('chart-title').textContent = `${name}（${symbol}）`;
+  document.getElementById('chart-section').classList.add('visible');
+  document.getElementById('chart-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // 清除舊圖
+  if (mainChart) { mainChart.remove(); mainChart = null; }
+  if (rsiChart) { rsiChart.remove(); rsiChart = null; }
+
+  const resp = await fetch(`/api/chart/${symbol}`);
+  if (!resp.ok) { showToast('❌ 圖表資料載入失敗'); return; }
+  const data = await resp.json();
+
+  // K 線圖
+  mainChart = LightweightCharts.createChart(document.getElementById('chart-container'), {
+    layout: { background: { color: '#1e293b' }, textColor: '#94a3b8' },
+    grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
+    rightPriceScale: { borderColor: '#334155' },
+    timeScale: { borderColor: '#334155', timeVisible: true },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+  mainChart.timeScale().fitContent();
+
+  const candleSeries = mainChart.addCandlestickSeries({
+    upColor: '#22c55e', downColor: '#ef4444',
+    borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+    wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+  });
+  candleSeries.setData(data.candles);
+
+  const ma5Series = mainChart.addLineSeries({ color: '#3b82f6', lineWidth: 1, priceLineVisible: false });
+  ma5Series.setData(data.ma5);
+
+  const ma20Series = mainChart.addLineSeries({ color: '#f59e0b', lineWidth: 1, priceLineVisible: false });
+  ma20Series.setData(data.ma20);
+
+  // RSI 圖
+  rsiChart = LightweightCharts.createChart(document.getElementById('rsi-container'), {
+    layout: { background: { color: '#1e293b' }, textColor: '#94a3b8' },
+    grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
+    rightPriceScale: { borderColor: '#334155' },
+    timeScale: { borderColor: '#334155', visible: false },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+  });
+
+  const rsiSeries = rsiChart.addLineSeries({ color: '#a78bfa', lineWidth: 1, priceLineVisible: false });
+  rsiSeries.setData(data.rsi);
+
+  // 超買/超賣線
+  const overbought = rsiChart.addLineSeries({ color: '#ef4444', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+  const oversold = rsiChart.addLineSeries({ color: '#22c55e', lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+  if (data.rsi.length > 0) {
+    const times = data.rsi.map(d => d.time);
+    overbought.setData(times.map(t => ({ time: t, value: 70 })));
+    oversold.setData(times.map(t => ({ time: t, value: 30 })));
+  }
+
+  rsiChart.timeScale().fitContent();
+  mainChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+    if (range) rsiChart.timeScale().setVisibleLogicalRange(range);
+  });
+}
+
+// ── Enter 鍵送出 ──
+document.getElementById('add-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addStock();
+});
+
+// ── Toast ──
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+loadStocks();
+</script>
+</body>
+</html>
