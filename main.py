@@ -11,6 +11,8 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from ai import get_ai_analysis
 from analysis import get_indicators
 from db import add_stock, get_all_notify_users, get_notify, get_stocks, remove_stock, set_notify
+from market import format_taiex, get_taiex
+from news import get_stock_news
 from stock import format_stock_message, get_stock_price
 from web import router as web_router
 
@@ -140,7 +142,7 @@ async def push_message(user_id: str, text: str) -> None:
             logger.error("LINE push failed: %s", resp.text)
 
 
-def build_stock_block(symbol: str) -> str | None:
+def build_stock_block(symbol: str, taiex_str: str | None = None) -> str | None:
     """取得單支股票的完整推播區塊文字，失敗回傳 None"""
     price_data = get_stock_price(symbol)
     indicators = get_indicators(symbol)
@@ -161,8 +163,10 @@ def build_stock_block(symbol: str) -> str | None:
     if indicators is None:
         return price_line + "\n技術分析：資料不足，無法分析"
 
+    news = get_stock_news(name, symbol)
+
     try:
-        ai_block = get_ai_analysis(name, indicators)
+        ai_block = get_ai_analysis(name, indicators, news=news, taiex=taiex_str)
     except Exception as e:
         logger.error("AI analysis error for %s: %s", symbol, e)
         ai_block = "技術分析：分析暫時無法使用"
@@ -185,14 +189,19 @@ async def broadcast(request: Request, authorization: str = Header(...)):
     users = get_all_notify_users()
     logger.info("broadcast: %d users to notify", len(users))
 
+    # 大盤只抓一次，所有用戶共用
+    taiex_data = get_taiex()
+    taiex_str = format_taiex(taiex_data) if taiex_data else None
+
     now = datetime.now().strftime("%H:%M")
-    header = f"📈 每日收盤報告 {now}\n"
+    market_line = f"【{taiex_str}】\n" if taiex_str else ""
+    header = f"📈 每日收盤報告 {now}\n{market_line}"
 
     pushed = 0
     for user in users:
         blocks = []
         for symbol in user["stocks"]:
-            block = build_stock_block(symbol)
+            block = build_stock_block(symbol, taiex_str=taiex_str)
             if block:
                 blocks.append(block)
 
