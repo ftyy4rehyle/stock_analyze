@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from google.cloud import firestore
 
@@ -17,19 +18,32 @@ def _user_ref(user_id: str):
 
 
 # ── 追蹤清單 ──────────────────────────────────────────────────────────────────
+# stocks 結構：[{"symbol": "2330", "cost": 2350.0, "date": "2026-06-25", "qty": 1000}, ...]
+# cost 為 None 時代表「觀察中」，尚未持有
 
-def add_stock(user_id: str, symbol: str) -> bool:
-    """加入追蹤，最多 10 支。回傳 False 表示已達上限。"""
+def add_stock(user_id: str, symbol: str, cost: float | None = None, qty: float | None = None) -> bool:
+    """加入追蹤，最多 10 支。回傳 False 表示已達上限。已存在則更新成本/股數。"""
     ref = _user_ref(user_id)
     doc = ref.get()
     stocks = doc.to_dict().get("stocks", []) if doc.exists else []
 
-    if symbol in stocks:
+    existing = next((s for s in stocks if s["symbol"] == symbol), None)
+    if existing:
+        existing["cost"] = cost
+        existing["qty"] = qty
+        existing["date"] = datetime.now().strftime("%Y-%m-%d")
+        ref.set({"stocks": stocks, "notify": True}, merge=True)
         return True
+
     if len(stocks) >= 10:
         return False
 
-    stocks.append(symbol)
+    stocks.append({
+        "symbol": symbol,
+        "cost": cost,
+        "qty": qty,
+        "date": datetime.now().strftime("%Y-%m-%d"),
+    })
     ref.set({"stocks": stocks, "notify": True}, merge=True)
     return True
 
@@ -42,19 +56,25 @@ def remove_stock(user_id: str, symbol: str) -> bool:
         return False
 
     stocks = doc.to_dict().get("stocks", [])
-    if symbol not in stocks:
+    new_stocks = [s for s in stocks if s["symbol"] != symbol]
+    if len(new_stocks) == len(stocks):
         return False
 
-    stocks.remove(symbol)
-    ref.set({"stocks": stocks}, merge=True)
+    ref.set({"stocks": new_stocks}, merge=True)
     return True
 
 
-def get_stocks(user_id: str) -> list[str]:
+def get_stocks(user_id: str) -> list[dict]:
+    """回傳持股清單，每筆含 symbol/cost/qty/date"""
     doc = _user_ref(user_id).get()
     if not doc.exists:
         return []
     return doc.to_dict().get("stocks", [])
+
+
+def get_symbols(user_id: str) -> list[str]:
+    """僅回傳股票代號清單"""
+    return [s["symbol"] for s in get_stocks(user_id)]
 
 
 # ── 推播開關 ──────────────────────────────────────────────────────────────────

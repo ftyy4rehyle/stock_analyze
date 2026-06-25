@@ -37,11 +37,13 @@
     /* Add stock */
     .add-form {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
-      margin-bottom: 20px;
+      margin-bottom: 8px;
     }
     .add-form input {
       flex: 1;
+      min-width: 100px;
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 8px;
@@ -52,6 +54,7 @@
     }
     .add-form input:focus { border-color: #3b82f6; }
     .add-form input::placeholder { color: #94a3b8; }
+    .add-hint { font-size: 0.75rem; color: #64748b; margin-bottom: 20px; margin-top: -12px; }
     .btn {
       background: #3b82f6;
       color: #fff;
@@ -174,9 +177,12 @@
 <main>
   <!-- Add stock -->
   <div class="add-form">
-    <input id="add-input" type="text" placeholder="輸入股票代號（例如：2330）" maxlength="10">
+    <input id="add-input" type="text" placeholder="股票代號（例如：2330）" maxlength="10" style="flex:1.2">
+    <input id="cost-input" type="number" placeholder="成本（選填）" step="0.01" style="flex:1">
+    <input id="qty-input" type="number" placeholder="股數（選填）" step="1" style="flex:1">
     <button class="btn" id="add-btn" onclick="addStock()">追蹤</button>
   </div>
+  <div class="add-hint">不填成本 = 觀察進場訊號；填成本 = 追蹤賣出時機</div>
 
   <!-- Watchlist -->
   <div class="section-title">追蹤清單</div>
@@ -228,11 +234,19 @@ async function loadStocks() {
     const arrow = up ? '▲' : '▼';
     const sign = up ? '+' : '';
     const cls = up ? 'up' : 'down';
+
+    let costInfo = '<div class="symbol">觀察中</div>';
+    if (s.cost) {
+      const gainUp = s.gain_pct >= 0;
+      const gainSign = gainUp ? '+' : '';
+      costInfo = `<div class="symbol">成本 ${s.cost} <span class="${gainUp ? 'up' : 'down'}">${gainSign}${s.gain_pct ?? '-'}%</span></div>`;
+    }
+
     return `
       <div class="stock-card" id="card-${s.symbol}" onclick="loadChart('${s.symbol}', '${s.name}')">
         <div class="stock-info">
-          <div class="name">${s.name}</div>
-          <div class="symbol">${s.symbol}</div>
+          <div class="name">${s.name}（${s.symbol}）</div>
+          ${costInfo}
         </div>
         <div class="stock-right">
           <div class="stock-price">
@@ -247,16 +261,24 @@ async function loadStocks() {
 
 // ── 加入追蹤 ──
 async function addStock() {
-  const input = document.getElementById('add-input');
-  const symbol = input.value.trim().toUpperCase();
+  const symbolInput = document.getElementById('add-input');
+  const costInput = document.getElementById('cost-input');
+  const qtyInput = document.getElementById('qty-input');
+  const symbol = symbolInput.value.trim().toUpperCase();
   if (!symbol) return;
 
   const btn = document.getElementById('add-btn');
   btn.disabled = true;
 
-  const resp = await fetch(`/api/stocks/${symbol}`, { method: 'POST' });
+  const params = new URLSearchParams();
+  if (costInput.value) params.set('cost', costInput.value);
+  if (qtyInput.value) params.set('qty', qtyInput.value);
+
+  const resp = await fetch(`/api/stocks/${symbol}?${params}`, { method: 'POST' });
   if (resp.ok) {
-    input.value = '';
+    symbolInput.value = '';
+    costInput.value = '';
+    qtyInput.value = '';
     showToast(`✅ 已追蹤 ${symbol}`);
     await loadStocks();
   } else {

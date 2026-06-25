@@ -18,13 +18,18 @@ def _fetch_month(symbol: str, date: str) -> list[float]:
     return [float(row[6].replace(",", "")) for row in data["data"]]
 
 
-def get_history(symbol: str) -> list[float]:
-    """取得近兩個月收盤價（至少 25 筆才夠算 MA20+RSI）"""
+def get_history(symbol: str, months: int = 4) -> list[float]:
+    """取得近 N 個月收盤價（預設 4 個月，足夠算 MA60）"""
     now = datetime.now()
-    this_month = now.strftime("%Y%m%d")
-    prev_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y%m%d")
+    dates = []
+    d = now
+    for _ in range(months):
+        dates.insert(0, d.strftime("%Y%m%d"))
+        d = d.replace(day=1) - timedelta(days=1)
 
-    prices = _fetch_month(symbol, prev_month) + _fetch_month(symbol, this_month)
+    prices = []
+    for date in dates:
+        prices.extend(_fetch_month(symbol, date))
     return prices
 
 
@@ -60,5 +65,6 @@ def get_indicators(symbol: str) -> dict | None:
         "price": prices[-1],
         "ma5": calc_ma(prices, 5),
         "ma20": calc_ma(prices, 20),
+        "ma60": calc_ma(prices, 60),
         "rsi": calc_rsi(prices, 14),
     }

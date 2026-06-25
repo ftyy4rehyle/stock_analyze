@@ -134,24 +134,36 @@ def api_get_stocks(session: str | None = Cookie(default=None)):
         raise HTTPException(status_code=401)
     stocks = get_stocks(user["user_id"])
     result = []
-    for symbol in stocks:
+    for s in stocks:
+        symbol = s["symbol"]
         price_data = get_stock_price(symbol)
+        gain_pct = None
+        if s.get("cost") and price_data:
+            gain_pct = round((price_data["price"] - s["cost"]) / s["cost"] * 100, 2)
         result.append({
             "symbol": symbol,
             "name": price_data["name"] if price_data else symbol,
             "price": price_data["price"] if price_data else None,
             "change": price_data["change"] if price_data else None,
             "change_pct": price_data["change_pct"] if price_data else None,
+            "cost": s.get("cost"),
+            "qty": s.get("qty"),
+            "gain_pct": gain_pct,
         })
     return result
 
 
 @router.post("/api/stocks/{symbol}")
-def api_add_stock(symbol: str, session: str | None = Cookie(default=None)):
+def api_add_stock(
+    symbol: str,
+    cost: float | None = None,
+    qty: float | None = None,
+    session: str | None = Cookie(default=None),
+):
     user = _parse_session(session)
     if not user:
         raise HTTPException(status_code=401)
-    ok = add_stock(user["user_id"], symbol.strip().upper())
+    ok = add_stock(user["user_id"], symbol.strip().upper(), cost=cost, qty=qty)
     if not ok:
         raise HTTPException(status_code=400, detail="追蹤清單已達上限（最多 10 支）")
     return {"ok": True}

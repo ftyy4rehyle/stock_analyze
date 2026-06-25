@@ -74,12 +74,32 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
     elif text.startswith("/追蹤"):
         parts = text.split()
         if len(parts) < 2:
-            await reply_message(reply_token, "請輸入股票代號，例如：/追蹤 2330")
+            await reply_message(
+                reply_token,
+                "請輸入股票代號，例如：\n"
+                "/追蹤 2330 — 觀察進場訊號\n"
+                "/追蹤 2330 2350 — 已持有，成本 2350 元\n"
+                "/追蹤 2330 2350 1000 — 已持有，成本 2350 元，1000 股",
+            )
             return
         symbol = parts[1].strip()
-        ok = add_stock(user_id, symbol)
+        cost = None
+        qty = None
+        try:
+            if len(parts) >= 3:
+                cost = float(parts[2])
+            if len(parts) >= 4:
+                qty = float(parts[3])
+        except ValueError:
+            await reply_message(reply_token, "成本/股數請輸入數字，例如：/追蹤 2330 2350")
+            return
+
+        ok = add_stock(user_id, symbol, cost=cost, qty=qty)
         if ok:
-            await reply_message(reply_token, f"✅ 已加入追蹤：{symbol}")
+            if cost:
+                await reply_message(reply_token, f"✅ 已加入追蹤：{symbol}（成本 {cost} 元）")
+            else:
+                await reply_message(reply_token, f"✅ 已加入追蹤：{symbol}（觀察進場訊號）")
         else:
             await reply_message(reply_token, "追蹤清單已達上限（最多 10 支），請先取消追蹤部分股票。")
 
@@ -102,7 +122,19 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
             await reply_message(reply_token, "追蹤清單是空的，輸入 /追蹤 [代號] 開始追蹤。")
         else:
             notify_status = "開啟 ✅" if notify else "關閉 ❌"
-            stock_list = "\n".join(f"• {s}" for s in stocks)
+            lines = []
+            for s in stocks:
+                if s.get("cost"):
+                    price_data = get_stock_price(s["symbol"])
+                    if price_data:
+                        gain_pct = round((price_data["price"] - s["cost"]) / s["cost"] * 100, 2)
+                        sign = "+" if gain_pct >= 0 else ""
+                        lines.append(f"• {s['symbol']}（成本 {s['cost']}，{sign}{gain_pct}%）")
+                    else:
+                        lines.append(f"• {s['symbol']}（成本 {s['cost']}）")
+                else:
+                    lines.append(f"• {s['symbol']}（觀察中）")
+            stock_list = "\n".join(lines)
             await reply_message(reply_token, f"📋 你的追蹤清單（{len(stocks)}/10）：\n{stock_list}\n\n每日推播：{notify_status}")
 
     elif text == "/推播開":
@@ -118,7 +150,9 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
             reply_token,
             "Bower Stock 指令列表：\n"
             "/查股 [代號] — 查詢股票現價\n"
-            "/追蹤 [代號] — 加入追蹤清單\n"
+            "/追蹤 [代號] — 觀察進場訊號\n"
+            "/追蹤 [代號] [成本] — 已持有，追蹤賣出時機\n"
+            "/追蹤 [代號] [成本] [股數] — 同上，含股數\n"
             "/取消追蹤 [代號] — 移除追蹤\n"
             "/我的股票 — 查看追蹤清單\n"
             "/推播開 / /推播關 — 開關每日推播",
@@ -142,8 +176,9 @@ async def push_message(user_id: str, text: str) -> None:
             logger.error("LINE push failed: %s", resp.text)
 
 
-def build_stock_block(symbol: str, taiex_str: str | None = None) -> str | None:
+def build_stock_block(position: dict, taiex_str: str | None = None) -> str | None:
     """取得單支股票的完整推播區塊文字，失敗回傳 None"""
+    symbol = position["symbol"]
     price_data = get_stock_price(symbol)
     indicators = get_indicators(symbol)
 
@@ -166,7 +201,7 @@ def build_stock_block(symbol: str, taiex_str: str | None = None) -> str | None:
     news = get_stock_news(name, symbol)
 
     try:
-        ai_block = get_ai_analysis(name, indicators, news=news, taiex=taiex_str)
+        ai_block = get_ai_analysis(name, indicators, news=news, taiex=taiex_str, position=position)
     except Exception as e:
         logger.error("AI analysis error for %s: %s", symbol, e)
         ai_block = "技術分析：分析暫時無法使用"
@@ -200,8 +235,8 @@ async def broadcast(request: Request, authorization: str = Header(...)):
     pushed = 0
     for user in users:
         blocks = []
-        for symbol in user["stocks"]:
-            block = build_stock_block(symbol, taiex_str=taiex_str)
+        for position in user["stocks"]:
+            block = build_stock_block(position, taiex_str=taiex_str)
             if block:
                 blocks.append(block)
 
