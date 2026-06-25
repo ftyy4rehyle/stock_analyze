@@ -192,6 +192,29 @@
       z-index: 100;
     }
     .toast.show { opacity: 1; }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      border-bottom: 1px solid #334155;
+      margin-bottom: 20px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 10px 18px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: #e2e8f0; }
+    .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
   </style>
 </head>
 <body>
@@ -205,47 +228,57 @@
 </header>
 
 <main>
-  <!-- Add stock -->
-  <div class="add-form">
-    <input id="add-input" type="text" placeholder="股票代號（例如：2330）" maxlength="10" style="flex:1.2">
-    <input id="cost-input" type="number" placeholder="成本（選填）" step="0.01" style="flex:1">
-    <input id="qty-input" type="number" placeholder="股數（選填）" step="1" style="flex:1">
-    <button class="btn" id="add-btn" onclick="addStock()">追蹤</button>
-  </div>
-  <div class="add-hint">不填成本 = 觀察進場訊號；填成本 = 追蹤賣出時機</div>
-
-  <!-- Watchlist -->
-  <div class="section-title">追蹤清單</div>
-  <div class="stock-list" id="stock-list">
-    <div class="empty">載入中…</div>
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-btn-chart" onclick="switchTab('chart')">K 線圖</button>
+    <button class="tab-btn" id="tab-btn-rules" onclick="switchTab('rules')">個人規則</button>
   </div>
 
-  <!-- Chart -->
-  <div id="chart-section">
-    <div class="chart-header">
-      <div>
-        <div class="chart-title" id="chart-title"></div>
-        <div class="chart-subtitle">K 線圖</div>
+  <!-- Tab: K 線圖 -->
+  <div class="tab-panel active" id="tab-chart">
+    <!-- Add stock -->
+    <div class="add-form">
+      <input id="add-input" type="text" placeholder="股票代號（例如：2330）" maxlength="10" style="flex:1.2">
+      <input id="cost-input" type="number" placeholder="成本（選填）" step="0.01" style="flex:1">
+      <input id="qty-input" type="number" placeholder="股數（選填）" step="1" style="flex:1">
+      <button class="btn" id="add-btn" onclick="addStock()">追蹤</button>
+    </div>
+    <div class="add-hint">不填成本 = 觀察進場訊號；填成本 = 追蹤賣出時機</div>
+
+    <!-- Watchlist -->
+    <div class="section-title">追蹤清單</div>
+    <div class="stock-list" id="stock-list">
+      <div class="empty">載入中…</div>
+    </div>
+
+    <!-- Chart -->
+    <div id="chart-section">
+      <div class="chart-header">
+        <div>
+          <div class="chart-title" id="chart-title"></div>
+          <div class="chart-subtitle">K 線圖</div>
+        </div>
       </div>
+      <div class="chart-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> MA5</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> MA20</div>
+      </div>
+      <div id="chart-container" style="height:280px"></div>
+      <div class="chart-legend" style="margin-top:10px">
+        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> RSI(14)</div>
+      </div>
+      <div id="rsi-container" style="height:120px"></div>
     </div>
-    <div class="chart-legend">
-      <div class="legend-item"><div class="legend-dot" style="background:#3b82f6"></div> MA5</div>
-      <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> MA20</div>
-    </div>
-    <div id="chart-container" style="height:280px"></div>
-    <div class="chart-legend" style="margin-top:10px">
-      <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> RSI(14)</div>
-    </div>
-    <div id="rsi-container" style="height:120px"></div>
   </div>
 
-  <!-- Rules -->
-  <div class="section-title" style="margin-top:24px">我的交易規則</div>
-  <div class="rules-box">
-    <textarea id="rules-input" placeholder="留空 = 使用系統預設規則（保守波段）。可自訂例如：策略：積極成長，RSI<30買進，獲利15%停利，停損10%"></textarea>
-    <div class="rules-actions">
-      <button class="btn" id="rules-save-btn" onclick="saveRules()">儲存規則</button>
-      <span class="rules-status" id="rules-status"></span>
+  <!-- Tab: 個人規則 -->
+  <div class="tab-panel" id="tab-rules">
+    <div class="section-title">我的交易規則</div>
+    <div class="rules-box">
+      <textarea id="rules-input" placeholder="留空 = 使用系統預設規則（保守波段）。可自訂例如：策略：積極成長，RSI<30買進，獲利15%停利，停損10%"></textarea>
+      <div class="rules-actions">
+        <button class="btn" id="rules-save-btn" onclick="saveRules()">儲存規則</button>
+        <span class="rules-status" id="rules-status"></span>
+      </div>
     </div>
   </div>
 </main>
@@ -256,6 +289,16 @@
 let mainChart = null;
 let rsiChart = null;
 let activeSymbol = null;
+
+// ── 頁籤切換 ──
+function switchTab(name) {
+  document.getElementById('tab-chart').classList.toggle('active', name === 'chart');
+  document.getElementById('tab-rules').classList.toggle('active', name === 'rules');
+  document.getElementById('tab-btn-chart').classList.toggle('active', name === 'chart');
+  document.getElementById('tab-btn-rules').classList.toggle('active', name === 'rules');
+  if (mainChart) mainChart.resize(document.getElementById('chart-container').clientWidth, 280);
+  if (rsiChart) rsiChart.resize(document.getElementById('rsi-container').clientWidth, 120);
+}
 
 // ── 載入追蹤清單 ──
 async function loadStocks() {
