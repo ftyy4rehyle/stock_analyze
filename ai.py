@@ -4,7 +4,7 @@ import anthropic
 
 _client = None
 
-PERSONAL_RULES = """策略：保守波段
+DEFAULT_RULES = """策略：保守波段
 
 買進條件（須同時符合）：
 - MA20 > MA60（中期趨勢向上）
@@ -40,12 +40,15 @@ def get_ai_analysis(
     news: list[str] | None = None,
     taiex: str | None = None,
     position: dict | None = None,
+    user_rules: str | None = None,
 ) -> str:
     """
     接收技術指標、新聞、大盤、持股資訊，呼叫 Claude Haiku 生成買賣建議。
     position 為 None 或 cost 為 None 時 → 進場評估模式
     position 有 cost 時 → 持有/賣出評估模式（套用個人規則）
+    user_rules 有值時優先使用，否則 fallback 用系統預設規則（DEFAULT_RULES）
     """
+    rules = user_rules.strip() if user_rules else DEFAULT_RULES
     symbol = indicators["symbol"]
     price = indicators["price"]
     ma5 = indicators.get("ma5")
@@ -96,7 +99,7 @@ RSI（14日）：{rsi}{market_section}{news_section}
 {mode_section}
 
 個人交易規則：
-{PERSONAL_RULES}
+{rules}
 
 請輸出以下格式，每行一條，不要多餘說明：
 {output_format}

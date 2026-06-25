@@ -146,6 +146,36 @@
     .legend-dot { width: 10px; height: 3px; border-radius: 2px; }
 
     .empty { color: #475569; font-size: 0.9rem; padding: 20px 0; }
+
+    /* Rules */
+    .rules-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .rules-box textarea {
+      width: 100%;
+      min-height: 90px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      font-family: inherit;
+      resize: vertical;
+      outline: none;
+    }
+    .rules-box textarea:focus { border-color: #3b82f6; }
+    .rules-box textarea::placeholder { color: #64748b; }
+    .rules-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .rules-status { font-size: 0.8rem; color: #94a3b8; }
     .toast {
       position: fixed;
       bottom: 24px;
@@ -207,6 +237,16 @@
       <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div> RSI(14)</div>
     </div>
     <div id="rsi-container" style="height:120px"></div>
+  </div>
+
+  <!-- Rules -->
+  <div class="section-title" style="margin-top:24px">我的交易規則</div>
+  <div class="rules-box">
+    <textarea id="rules-input" placeholder="留空 = 使用系統預設規則（保守波段）。可自訂例如：策略：積極成長，RSI<30買進，獲利15%停利，停損10%"></textarea>
+    <div class="rules-actions">
+      <button class="btn" id="rules-save-btn" onclick="saveRules()">儲存規則</button>
+      <span class="rules-status" id="rules-status"></span>
+    </div>
   </div>
 </main>
 
@@ -388,7 +428,37 @@ function showToast(msg) {
   setTimeout(() => el.classList.remove('show'), 2500);
 }
 
+// ── 個人規則 ──
+async function loadRules() {
+  const resp = await fetch('/api/rules');
+  if (!resp.ok) return;
+  const data = await resp.json();
+  document.getElementById('rules-input').value = data.rules || '';
+}
+
+async function saveRules() {
+  const btn = document.getElementById('rules-save-btn');
+  const status = document.getElementById('rules-status');
+  const rules = document.getElementById('rules-input').value.trim();
+  btn.disabled = true;
+
+  const resp = await fetch('/api/rules', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rules }),
+  });
+
+  if (resp.ok) {
+    status.textContent = rules ? '✅ 已儲存個人規則' : '✅ 已清除，改用系統預設規則';
+  } else {
+    status.textContent = '❌ 儲存失敗';
+  }
+  setTimeout(() => { status.textContent = ''; }, 3000);
+  btn.disabled = false;
+}
+
 loadStocks();
+loadRules();
 </script>
 </body>
 </html>

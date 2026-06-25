@@ -11,7 +11,16 @@ from fastapi import FastAPI, Header, HTTPException, Request
 
 from ai import get_ai_analysis
 from analysis import get_indicators
-from db import add_stock, get_all_notify_users, get_notify, get_stocks, remove_stock, set_notify
+from db import (
+    add_stock,
+    get_all_notify_users,
+    get_notify,
+    get_rules,
+    get_stocks,
+    remove_stock,
+    set_notify,
+    set_rules,
+)
 from market import format_taiex, get_taiex
 from news import get_stock_news
 from stock import format_stock_message, get_stock_price
@@ -146,6 +155,29 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
         set_notify(user_id, False)
         await reply_message(reply_token, "❌ 每日推播已關閉。")
 
+    elif text.startswith("/設定規則"):
+        content = text[len("/設定規則"):].strip()
+        if not content:
+            await reply_message(
+                reply_token,
+                "請在指令後輸入規則內容，例如：\n"
+                "/設定規則 策略：積極。RSI<30買進，獲利15%停利，停損10%",
+            )
+            return
+        set_rules(user_id, content)
+        await reply_message(reply_token, f"✅ 已更新你的交易規則：\n{content}")
+
+    elif text == "/我的規則":
+        rules = get_rules(user_id)
+        if rules:
+            await reply_message(reply_token, f"📜 你的交易規則：\n{rules}")
+        else:
+            await reply_message(reply_token, "你尚未設定個人規則，目前套用系統預設規則（保守波段）。\n輸入 /設定規則 [內容] 自訂。")
+
+    elif text == "/清除規則":
+        set_rules(user_id, "")
+        await reply_message(reply_token, "✅ 已清除個人規則，改用系統預設規則。")
+
     else:
         await reply_message(
             reply_token,
@@ -156,7 +188,10 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
             "/追蹤 [代號] [成本] [股數] — 同上，含股數\n"
             "/取消追蹤 [代號] — 移除追蹤\n"
             "/我的股票 — 查看追蹤清單\n"
-            "/推播開 / /推播關 — 開關每日推播",
+            "/推播開 / /推播關 — 開關每日推播\n"
+            "/設定規則 [內容] — 自訂個人交易規則\n"
+            "/我的規則 — 查看目前規則\n"
+            "/清除規則 — 恢復系統預設規則",
         )
 
 
@@ -177,7 +212,7 @@ async def push_message(user_id: str, text: str) -> None:
             logger.error("LINE push failed: %s", resp.text)
 
 
-def build_stock_block(position: dict, taiex_str: str | None = None) -> str | None:
+def build_stock_block(position: dict, taiex_str: str | None = None, user_rules: str | None = None) -> str | None:
     """取得單支股票的完整推播區塊文字，失敗回傳 None"""
     symbol = position["symbol"]
     price_data = get_stock_price(symbol)
@@ -207,7 +242,7 @@ def build_stock_block(position: dict, taiex_str: str | None = None) -> str | Non
     news = get_stock_news(name, symbol)
 
     try:
-        ai_block = get_ai_analysis(name, indicators, news=news, taiex=taiex_str, position=position)
+        ai_block = get_ai_analysis(name, indicators, news=news, taiex=taiex_str, position=position, user_rules=user_rules)
     except Exception as e:
         logger.error("AI analysis error for %s: %s", symbol, e)
         ai_block = "技術分析：分析暫時無法使用"
@@ -243,7 +278,7 @@ async def broadcast(request: Request, authorization: str = Header(...)):
         blocks = []
         for position in user["stocks"]:
             time.sleep(0.3)
-            block = build_stock_block(position, taiex_str=taiex_str)
+            block = build_stock_block(position, taiex_str=taiex_str, user_rules=user.get("rules"))
             if block:
                 blocks.append(block)
 

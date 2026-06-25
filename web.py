@@ -11,7 +11,7 @@ from fastapi.templating import Jinja2Templates
 from itsdangerous import BadSignature, URLSafeSerializer
 
 from chart import get_chart_data
-from db import add_stock, get_stocks, remove_stock
+from db import add_stock, get_rules, get_stocks, remove_stock, set_rules
 from stock import get_stock_price
 
 logger = logging.getLogger(__name__)
@@ -124,6 +124,25 @@ def index(request: Request, session: str | None = Cookie(default=None)):
         "request": request,
         "display_name": user["display_name"],
     })
+
+
+# ── Rules API ─────────────────────────────────────────────────────────────────
+
+@router.get("/api/rules")
+def api_get_rules(session: str | None = Cookie(default=None)):
+    user = _parse_session(session)
+    if not user:
+        raise HTTPException(status_code=401)
+    return {"rules": get_rules(user["user_id"]) or ""}
+
+
+@router.post("/api/rules")
+def api_set_rules(body: dict, session: str | None = Cookie(default=None)):
+    user = _parse_session(session)
+    if not user:
+        raise HTTPException(status_code=401)
+    set_rules(user["user_id"], body.get("rules", ""))
+    return {"ok": True}
 
 
 # ── API ───────────────────────────────────────────────────────────────────────

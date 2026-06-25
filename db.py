@@ -103,12 +103,31 @@ def get_notify(user_id: str) -> bool:
 
 
 def get_all_notify_users() -> list[dict]:
-    """回傳所有 notify=True 且有追蹤股票的用戶，含 user_id 與 stocks 清單"""
+    """回傳所有 notify=True 且有追蹤股票的用戶，含 user_id、stocks、rules"""
     docs = get_db().collection("stock_users").where("notify", "==", True).stream()
     result = []
     for doc in docs:
         data = doc.to_dict()
         stocks = data.get("stocks", [])
         if stocks:
-            result.append({"user_id": doc.id, "stocks": stocks})
+            result.append({
+                "user_id": doc.id,
+                "stocks": stocks,
+                "rules": data.get("rules") or None,
+            })
     return result
+
+
+# ── 個人交易規則 ──────────────────────────────────────────────────────────────
+
+def set_rules(user_id: str, rules: str) -> None:
+    """設定個人交易規則（自由文字）。空字串視為清除，改用系統預設規則。"""
+    _user_ref(user_id).set({"rules": rules.strip()}, merge=True)
+
+
+def get_rules(user_id: str) -> str | None:
+    """回傳個人交易規則，未設定則回傳 None（AI 分析時改用系統預設規則）"""
+    doc = _user_ref(user_id).get()
+    if not doc.exists:
+        return None
+    return doc.to_dict().get("rules") or None
