@@ -3,6 +3,7 @@ import hashlib
 import hmac
 import logging
 import os
+import time
 from datetime import datetime
 
 import httpx
@@ -236,6 +237,7 @@ async def broadcast(request: Request, authorization: str = Header(...)):
     for user in users:
         blocks = []
         for position in user["stocks"]:
+            time.sleep(0.3)
             block = build_stock_block(position, taiex_str=taiex_str)
             if block:
                 blocks.append(block)

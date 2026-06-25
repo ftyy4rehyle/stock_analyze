@@ -1,20 +1,14 @@
 from datetime import datetime, timedelta
 
-import httpx
+from twse_client import get_json
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
 
 
 def _fetch_month(symbol: str, date: str) -> list[float]:
     """抓單月收盤價列表"""
-    resp = httpx.get(
-        TWSE_URL,
-        params={"response": "json", "date": date, "stockNo": symbol},
-        timeout=10,
-        follow_redirects=True,
-    )
-    data = resp.json()
-    if data.get("stat") != "OK" or not data.get("data"):
+    data = get_json(TWSE_URL, {"response": "json", "date": date, "stockNo": symbol})
+    if not data or data.get("stat") != "OK" or not data.get("data"):
         return []
     return [float(row[6].replace(",", "")) for row in data["data"]]
 

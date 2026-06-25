@@ -1,9 +1,6 @@
-import logging
 from datetime import datetime, timedelta
 
-import httpx
-
-logger = logging.getLogger(__name__)
+from twse_client import get_json
 
 TWSE_INDEX_URL = "https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX"
 
@@ -20,36 +17,26 @@ def get_taiex() -> dict | None:
 
 
 def _fetch_taiex(date: str) -> dict | None:
-    try:
-        resp = httpx.get(
-            TWSE_INDEX_URL,
-            params={"date": date, "type": "IND", "response": "json"},
-            timeout=10,
-            follow_redirects=True,
-        )
-        data = resp.json()
-        if data.get("stat") != "OK":
-            return None
-        for row in data.get("data", []):
-            if "發行量加權股價指數" in row[0]:
-                # 欄位：指數名稱, 收盤, 漲跌點數, 漲跌百分比
-                close = float(row[1].replace(",", ""))
-                change_str = row[2].replace(",", "").strip()
-                change_pct_str = row[3].replace(",", "").strip()
-                try:
-                    change = float(change_str)
-                    change_pct = float(change_pct_str.replace("%", ""))
-                except ValueError:
-                    change, change_pct = 0.0, 0.0
-                return {
-                    "close": close,
-                    "change": change,
-                    "change_pct": change_pct,
-                }
+    data = get_json(TWSE_INDEX_URL, {"date": date, "type": "IND", "response": "json"})
+    if not data or data.get("stat") != "OK":
         return None
-    except Exception as e:
-        logger.warning("get_taiex error: %s", e)
-        return None
+    for row in data.get("data", []):
+        if "發行量加權股價指數" in row[0]:
+            # 欄位：指數名稱, 收盤, 漲跌點數, 漲跌百分比
+            close = float(row[1].replace(",", ""))
+            change_str = row[2].replace(",", "").strip()
+            change_pct_str = row[3].replace(",", "").strip()
+            try:
+                change = float(change_str)
+                change_pct = float(change_pct_str.replace("%", ""))
+            except ValueError:
+                change, change_pct = 0.0, 0.0
+            return {
+                "close": close,
+                "change": change,
+                "change_pct": change_pct,
+            }
+    return None
 
 
 def format_taiex(data: dict) -> str:

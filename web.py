@@ -1,6 +1,7 @@
 import logging
 import os
 import secrets
+import time
 from urllib.parse import urlencode
 
 import httpx
@@ -134,7 +135,9 @@ def api_get_stocks(session: str | None = Cookie(default=None)):
         raise HTTPException(status_code=401)
     stocks = get_stocks(user["user_id"])
     result = []
-    for s in stocks:
+    for i, s in enumerate(stocks):
+        if i > 0:
+            time.sleep(0.3)
         symbol = s["symbol"]
         price_data = get_stock_price(symbol)
         gain_pct = None

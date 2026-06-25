@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 
 import httpx
 
+from twse_client import get_json
+
 logger = logging.getLogger(__name__)
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
@@ -12,24 +14,12 @@ TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st
 def _fetch_twse(symbol: str) -> dict | None:
     """上市股票（TWSE）"""
     date = datetime.now().strftime("%Y%m%d")
-    resp = httpx.get(
-        TWSE_URL,
-        params={"response": "json", "date": date, "stockNo": symbol},
-        timeout=10,
-        follow_redirects=True,
-    )
-    data = resp.json()
-    if data.get("stat") != "OK" or not data.get("data"):
-        logger.warning("TWSE no data for %s stat=%s, trying prev month", symbol, data.get("stat"))
+    data = get_json(TWSE_URL, {"response": "json", "date": date, "stockNo": symbol})
+    if not data or data.get("stat") != "OK" or not data.get("data"):
+        logger.warning("TWSE no data for %s, trying prev month", symbol)
         prev = (datetime.now().replace(day=1) - timedelta(days=1)).strftime("%Y%m%d")
-        resp = httpx.get(
-            TWSE_URL,
-            params={"response": "json", "date": prev, "stockNo": symbol},
-            timeout=10,
-            follow_redirects=True,
-        )
-        data = resp.json()
-        if data.get("stat") != "OK" or not data.get("data"):
+        data = get_json(TWSE_URL, {"response": "json", "date": prev, "stockNo": symbol})
+        if not data or data.get("stat") != "OK" or not data.get("data"):
             logger.warning("TWSE prev month also no data for %s", symbol)
             return None
 

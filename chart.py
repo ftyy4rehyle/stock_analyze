@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
 
-import httpx
-
 from analysis import calc_rsi
+from twse_client import get_json
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
 
@@ -15,31 +14,22 @@ def _roc_to_iso(date_str: str) -> str:
 
 
 def _fetch_month_ohlcv(symbol: str, date: str) -> list[dict]:
-    try:
-        resp = httpx.get(
-            TWSE_URL,
-            params={"response": "json", "date": date, "stockNo": symbol},
-            timeout=10,
-            follow_redirects=True,
-        )
-        data = resp.json()
-        if data.get("stat") != "OK" or not data.get("data"):
-            return []
-        result = []
-        for row in data["data"]:
-            try:
-                result.append({
-                    "time": _roc_to_iso(row[0]),
-                    "open": float(row[3].replace(",", "")),
-                    "high": float(row[4].replace(",", "")),
-                    "low": float(row[5].replace(",", "")),
-                    "close": float(row[6].replace(",", "")),
-                })
-            except (ValueError, IndexError):
-                continue
-        return result
-    except Exception:
+    data = get_json(TWSE_URL, {"response": "json", "date": date, "stockNo": symbol})
+    if not data or data.get("stat") != "OK" or not data.get("data"):
         return []
+    result = []
+    for row in data["data"]:
+        try:
+            result.append({
+                "time": _roc_to_iso(row[0]),
+                "open": float(row[3].replace(",", "")),
+                "high": float(row[4].replace(",", "")),
+                "low": float(row[5].replace(",", "")),
+                "close": float(row[6].replace(",", "")),
+            })
+        except (ValueError, IndexError):
+            continue
+    return result
 
 
 def get_chart_data(symbol: str) -> dict | None:
