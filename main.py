@@ -78,8 +78,24 @@ async def handle_text(reply_token: str, user_id: str, text: str) -> None:
         data = get_stock_price(symbol)
         if data is None:
             await reply_message(reply_token, f"查無股票代號：{symbol}\n請確認代號是否正確（例如：2330、0050）")
-        else:
-            await reply_message(reply_token, format_stock_message(data))
+            return
+
+        cost = None
+        for s in get_stocks(user_id):
+            if s["symbol"] == symbol.upper():
+                cost = s.get("cost")
+                break
+
+        taiex_data = get_taiex()
+        taiex_str = format_taiex(taiex_data) if taiex_data else None
+        user_rules = get_rules(user_id)
+
+        block = build_stock_block(
+            {"symbol": symbol, "cost": cost},
+            taiex_str=taiex_str,
+            user_rules=user_rules,
+        )
+        await reply_message(reply_token, block or format_stock_message(data))
 
     elif text.startswith("/追蹤"):
         parts = text.split()
