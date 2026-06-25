@@ -111,12 +111,14 @@ RSI（14日）：{rsi}{market_section}{news_section}
 - 若 RSI > 70，說明超買；RSI < 30，說明超賣
 - 若有重大新聞利多/利空，可在分析中點出
 - 建議須保守，強調僅供個人參考，非投資建議
-- 格式要求：禁止使用 ✓ ✗ ✔ ✘ 等小型勾叉符號，一律用 ✅ ❌ 表示符合/不符合；每個條件項目獨立一行，不要把多個條件擠在同一行用符號分隔"""
+- 格式要求：禁止使用 ✓ ✗ ✔ ✘ 等小型勾叉符號，一律用 ✅ ❌ 表示符合/不符合；每個條件項目獨立一行，不要把多個條件擠在同一行用符號分隔
+- 純文字輸出，禁止使用 Markdown 語法（不要 ** 粗體、不要 # 標題、不要用 - 或 * 條列符號），純粹用換行分段即可
+- 每一句務必完整講完，不要中途斷句"""
 
     client = _get_client()
     message = client.messages.create(
         model="claude-haiku-4-5",
-        max_tokens=350,
+        max_tokens=500,
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text.strip()
