@@ -16,6 +16,7 @@ def _fetch_twse(symbol: str) -> dict | None:
         TWSE_URL,
         params={"response": "json", "date": date, "stockNo": symbol},
         timeout=10,
+        follow_redirects=True,
     )
     data = resp.json()
     if data.get("stat") != "OK" or not data.get("data"):
@@ -25,6 +26,7 @@ def _fetch_twse(symbol: str) -> dict | None:
             TWSE_URL,
             params={"response": "json", "date": prev, "stockNo": symbol},
             timeout=10,
+            follow_redirects=True,
         )
         data = resp.json()
         if data.get("stat") != "OK" or not data.get("data"):

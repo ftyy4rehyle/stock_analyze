@@ -11,6 +11,7 @@ def _fetch_month(symbol: str, date: str) -> list[float]:
         TWSE_URL,
         params={"response": "json", "date": date, "stockNo": symbol},
         timeout=10,
+        follow_redirects=True,
     )
     data = resp.json()
     if data.get("stat") != "OK" or not data.get("data"):

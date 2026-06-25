@@ -25,6 +25,7 @@ def _fetch_taiex(date: str) -> dict | None:
             TWSE_INDEX_URL,
             params={"date": date, "type": "IND", "response": "json"},
             timeout=10,
+            follow_redirects=True,
         )
         data = resp.json()
         if data.get("stat") != "OK":
