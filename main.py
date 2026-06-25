@@ -181,7 +181,12 @@ def build_stock_block(position: dict, taiex_str: str | None = None) -> str | Non
     """取得單支股票的完整推播區塊文字，失敗回傳 None"""
     symbol = position["symbol"]
     price_data = get_stock_price(symbol)
-    indicators = get_indicators(symbol)
+
+    try:
+        indicators = get_indicators(symbol)
+    except Exception as e:
+        logger.error("get_indicators error for %s: %s", symbol, e)
+        indicators = None
 
     if price_data is None:
         logger.warning("broadcast: no price data for %s", symbol)

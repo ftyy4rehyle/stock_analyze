@@ -6,11 +6,17 @@ TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
 
 
 def _fetch_month(symbol: str, date: str) -> list[float]:
-    """抓單月收盤價列表"""
+    """抓單月收盤價列表（跳過無交易日的 '--' 資料）"""
     data = get_json(TWSE_URL, {"response": "json", "date": date, "stockNo": symbol})
     if not data or data.get("stat") != "OK" or not data.get("data"):
         return []
-    return [float(row[6].replace(",", "")) for row in data["data"]]
+    prices = []
+    for row in data["data"]:
+        try:
+            prices.append(float(row[6].replace(",", "")))
+        except ValueError:
+            continue
+    return prices
 
 
 def get_history(symbol: str, months: int = 4) -> list[float]:
