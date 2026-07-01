@@ -1,11 +1,10 @@
 from datetime import datetime, timedelta
 
-import httpx
+import yfinance as yf
 
 from twse_client import get_json
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
-TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php"
 
 
 def _normalize(symbol: str) -> str:
@@ -26,21 +25,16 @@ def _fetch_month(symbol: str, date: str) -> list[float]:
     return prices
 
 
-def _fetch_month_tpex(symbol: str, year: int, month: int) -> list[float]:
-    """抓單月收盤價列表 - TPEx 上櫃"""
-    date = f"{year - 1911}/{month:02d}"
+def _fetch_history_yfinance(symbol: str, months: int) -> list[float]:
+    """上櫃股票歷史收盤價 - yfinance（TPEx 用 .TWO 後綴）"""
     try:
-        resp = httpx.get(TPEX_URL, params={"l": "zh-tw", "d": date, "s": symbol}, timeout=10)
-        rows = resp.json().get("aaData", [])
+        ticker = yf.Ticker(f"{symbol}.TWO")
+        hist = ticker.history(period=f"{months}mo")
+        if hist.empty:
+            return []
+        return [round(float(v), 2) for v in hist["Close"].tolist()]
     except Exception:
         return []
-    prices = []
-    for row in rows:
-        try:
-            prices.append(float(row[6].replace(",", "")))
-        except (ValueError, IndexError):
-            continue
-    return prices
 
 
 def get_history(symbol: str, months: int = 4) -> list[float]:
@@ -48,7 +42,6 @@ def get_history(symbol: str, months: int = 4) -> list[float]:
     symbol = _normalize(symbol)
     now = datetime.now()
 
-    # 產生月份列表
     month_list = []
     d = now
     for _ in range(months):
@@ -62,10 +55,8 @@ def get_history(symbol: str, months: int = 4) -> list[float]:
     if prices:
         return prices
 
-    # TWSE 無資料，改試 TPEx
-    for d in month_list:
-        prices.extend(_fetch_month_tpex(symbol, d.year, d.month))
-    return prices
+    # TWSE 無資料，改用 yfinance（上櫃）
+    return _fetch_history_yfinance(symbol, months)
 
 
 def calc_ma(prices: list[float], period: int) -> float | None:

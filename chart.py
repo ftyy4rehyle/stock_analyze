@@ -1,12 +1,11 @@
 from datetime import datetime, timedelta
 
-import httpx
+import yfinance as yf
 
 from analysis import calc_rsi
 from twse_client import get_json
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
-TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php"
 
 
 def _normalize(symbol: str) -> str:
@@ -40,27 +39,25 @@ def _fetch_month_ohlcv(symbol: str, date: str) -> list[dict]:
     return result
 
 
-def _fetch_month_ohlcv_tpex(symbol: str, year: int, month: int) -> list[dict]:
-    """TPEx 單月 OHLCV"""
-    date = f"{year - 1911}/{month:02d}"
+def _fetch_ohlcv_yfinance(symbol: str, months: int) -> list[dict]:
+    """上櫃股票 OHLCV - yfinance（TPEx 用 .TWO 後綴）"""
     try:
-        resp = httpx.get(TPEX_URL, params={"l": "zh-tw", "d": date, "s": symbol}, timeout=10)
-        rows = resp.json().get("aaData", [])
+        ticker = yf.Ticker(f"{symbol}.TWO")
+        hist = ticker.history(period=f"{months}mo")
+        if hist.empty:
+            return []
+        result = []
+        for date, row in hist.iterrows():
+            result.append({
+                "time": date.strftime("%Y-%m-%d"),
+                "open": round(float(row["Open"]), 2),
+                "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2),
+                "close": round(float(row["Close"]), 2),
+            })
+        return result
     except Exception:
         return []
-    result = []
-    for row in rows:
-        try:
-            result.append({
-                "time": _roc_to_iso(row[0]),
-                "open": float(row[3].replace(",", "")),
-                "high": float(row[4].replace(",", "")),
-                "low": float(row[5].replace(",", "")),
-                "close": float(row[6].replace(",", "")),
-            })
-        except (ValueError, IndexError):
-            continue
-    return result
 
 
 def get_chart_data(symbol: str) -> dict | None:
@@ -79,10 +76,9 @@ def get_chart_data(symbol: str) -> dict | None:
     for d in month_list:
         candles.extend(_fetch_month_ohlcv(symbol, d.strftime("%Y%m%d")))
 
-    # TWSE 無資料，改試 TPEx
+    # TWSE 無資料，改用 yfinance（上櫃）
     if not candles:
-        for d in month_list:
-            candles.extend(_fetch_month_ohlcv_tpex(symbol, d.year, d.month))
+        candles = _fetch_ohlcv_yfinance(symbol, 3)
 
     if not candles:
         return None

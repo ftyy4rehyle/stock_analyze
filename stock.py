@@ -2,13 +2,14 @@ import logging
 from datetime import datetime, timedelta
 
 import httpx
+import yfinance as yf
 
 from twse_client import get_json
 
 logger = logging.getLogger(__name__)
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
-TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php"
+TPEX_QUOTES_URL = "https://www.tpex.org.tw/www/zh-tw/afterTrading/dailyQuotes"
 
 
 def _fetch_twse(symbol: str) -> dict | None:
@@ -29,7 +30,6 @@ def _fetch_twse(symbol: str) -> dict | None:
     close = float(latest[6].replace(",", ""))
     change_str = latest[7].replace(",", "").strip()
 
-    # 漲跌符號在欄位前（有時帶 + / - 符號或 X）
     try:
         change = float(change_str.replace("+", "").replace("X", "0"))
         if "▼" in change_str or "-" in change_str:
@@ -39,7 +39,6 @@ def _fetch_twse(symbol: str) -> dict | None:
 
     change_pct = round((change / (close - change)) * 100, 2) if (close - change) != 0 else 0
     title = data.get("title", "")
-    # title 格式通常為 "XX年XX月 XXXX 股票日成交資訊"
     parts = title.split()
     name = parts[2] if len(parts) >= 3 else symbol
 
@@ -53,43 +52,41 @@ def _fetch_twse(symbol: str) -> dict | None:
 
 
 def _fetch_tpex(symbol: str) -> dict | None:
-    """上櫃股票（TPEx）"""
+    """上櫃股票（TPEx）- 用新版 dailyQuotes API，回傳當日行情"""
     now = datetime.now()
-    prev = now.replace(day=1) - timedelta(days=1)
-
-    for dt in [now, prev]:
-        date = f"{dt.year - 1911}/{dt.month:02d}"
+    for delta in range(5):
+        dt = now - timedelta(days=delta)
+        date_str = dt.strftime("%Y%m%d")
         try:
             resp = httpx.get(
-                TPEX_URL,
-                params={"l": "zh-tw", "d": date, "s": symbol},
-                timeout=10,
+                TPEX_QUOTES_URL,
+                params={"date": date_str, "response": "json"},
+                timeout=15,
             )
-            rows = resp.json().get("aaData", [])
-        except Exception:
-            rows = []
-        if rows:
-            break
-    if not rows:
-        return None
-
-    latest = rows[-1]
-    # 欄位：日期, 成交股數, 成交金額, 開盤, 最高, 最低, 收盤, 漲跌, 成交筆數
-    close = float(latest[6].replace(",", ""))
-    try:
-        change = float(latest[7].replace(",", "").replace("+", ""))
-    except ValueError:
-        change = 0.0
-
-    change_pct = round((change / (close - change)) * 100, 2) if (close - change) != 0 else 0
-
-    return {
-        "symbol": symbol,
-        "name": symbol,
-        "price": close,
-        "change": round(change, 2),
-        "change_pct": change_pct,
-    }
+            tables = resp.json().get("tables", [])
+            if not tables:
+                continue
+            rows = tables[0].get("data", [])
+            for row in rows:
+                if str(row[0]).strip() == symbol:
+                    close = float(str(row[2]).replace(",", ""))
+                    try:
+                        change = float(str(row[3]).replace(",", ""))
+                    except ValueError:
+                        change = 0.0
+                    prev_close = close - change
+                    change_pct = round((change / prev_close) * 100, 2) if prev_close != 0 else 0
+                    return {
+                        "symbol": symbol,
+                        "name": str(row[1]),
+                        "price": close,
+                        "change": round(change, 2),
+                        "change_pct": change_pct,
+                    }
+        except Exception as e:
+            logger.warning("TPEx dailyQuotes error [%s] date=%s: %s", symbol, date_str, e)
+            continue
+    return None
 
 
 def get_stock_price(symbol: str) -> dict | None:
