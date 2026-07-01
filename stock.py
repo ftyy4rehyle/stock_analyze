@@ -89,7 +89,7 @@ def _fetch_tpex(symbol: str) -> dict | None:
 
 def get_stock_price(symbol: str) -> dict | None:
     """查詢台股收盤價，先試 TWSE，失敗再試 TPEx"""
-    symbol = symbol.strip().upper().replace(".TW", "")
+    symbol = symbol.strip().upper().replace(".TWO", "").replace(".TW", "")
 
     try:
         result = _fetch_twse(symbol)

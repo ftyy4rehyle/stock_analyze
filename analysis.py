@@ -1,12 +1,19 @@
 from datetime import datetime, timedelta
 
+import httpx
+
 from twse_client import get_json
 
 TWSE_URL = "https://www.twse.com.tw/exchangeReport/STOCK_DAY"
+TPEX_URL = "https://www.tpex.org.tw/web/stock/aftertrading/daily_trading_info/st43_result.php"
+
+
+def _normalize(symbol: str) -> str:
+    return symbol.strip().upper().replace(".TWO", "").replace(".TW", "")
 
 
 def _fetch_month(symbol: str, date: str) -> list[float]:
-    """抓單月收盤價列表（跳過無交易日的 '--' 資料）"""
+    """抓單月收盤價列表 - TWSE 上市"""
     data = get_json(TWSE_URL, {"response": "json", "date": date, "stockNo": symbol})
     if not data or data.get("stat") != "OK" or not data.get("data"):
         return []
@@ -19,18 +26,45 @@ def _fetch_month(symbol: str, date: str) -> list[float]:
     return prices
 
 
+def _fetch_month_tpex(symbol: str, year: int, month: int) -> list[float]:
+    """抓單月收盤價列表 - TPEx 上櫃"""
+    date = f"{year - 1911}/{month:02d}"
+    try:
+        resp = httpx.get(TPEX_URL, params={"l": "zh-tw", "d": date, "s": symbol}, timeout=10)
+        rows = resp.json().get("aaData", [])
+    except Exception:
+        return []
+    prices = []
+    for row in rows:
+        try:
+            prices.append(float(row[6].replace(",", "")))
+        except (ValueError, IndexError):
+            continue
+    return prices
+
+
 def get_history(symbol: str, months: int = 4) -> list[float]:
     """取得近 N 個月收盤價（預設 4 個月，足夠算 MA60）"""
+    symbol = _normalize(symbol)
     now = datetime.now()
-    dates = []
+
+    # 產生月份列表
+    month_list = []
     d = now
     for _ in range(months):
-        dates.insert(0, d.strftime("%Y%m%d"))
+        month_list.insert(0, d)
         d = d.replace(day=1) - timedelta(days=1)
 
+    # 先試 TWSE
     prices = []
-    for date in dates:
-        prices.extend(_fetch_month(symbol, date))
+    for d in month_list:
+        prices.extend(_fetch_month(symbol, d.strftime("%Y%m%d")))
+    if prices:
+        return prices
+
+    # TWSE 無資料，改試 TPEx
+    for d in month_list:
+        prices.extend(_fetch_month_tpex(symbol, d.year, d.month))
     return prices
 
 
@@ -62,7 +96,7 @@ def get_indicators(symbol: str) -> dict | None:
         return None
 
     return {
-        "symbol": symbol,
+        "symbol": _normalize(symbol),
         "price": prices[-1],
         "ma5": calc_ma(prices, 5),
         "ma20": calc_ma(prices, 20),
