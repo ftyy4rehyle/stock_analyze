@@ -55,16 +55,21 @@ def _fetch_twse(symbol: str) -> dict | None:
 def _fetch_tpex(symbol: str) -> dict | None:
     """上櫃股票（TPEx）"""
     now = datetime.now()
-    # TPEx 使用民國年
-    year = now.year - 1911
-    date = f"{year}/{now.month:02d}"
-    resp = httpx.get(
-        TPEX_URL,
-        params={"l": "zh-tw", "d": date, "s": symbol},
-        timeout=10,
-    )
-    data = resp.json()
-    rows = data.get("aaData", [])
+    prev = now.replace(day=1) - timedelta(days=1)
+
+    for dt in [now, prev]:
+        date = f"{dt.year - 1911}/{dt.month:02d}"
+        try:
+            resp = httpx.get(
+                TPEX_URL,
+                params={"l": "zh-tw", "d": date, "s": symbol},
+                timeout=10,
+            )
+            rows = resp.json().get("aaData", [])
+        except Exception:
+            rows = []
+        if rows:
+            break
     if not rows:
         return None
 
